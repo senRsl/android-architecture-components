@@ -7,7 +7,7 @@ apply plugin: 'kotlin-android-extensions'
 apply plugin: 'kotlin-kapt'
 
 android {
-    compileSdkVersion build_versions.target_sdk
+    compileSdkVersion build_versions.compile_sdk
     buildToolsVersion build_versions.build_tools
 
     defaultConfig {
@@ -16,6 +16,18 @@ android {
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = "1.8"
+        freeCompilerArgs += ["-Xopt-in=kotlin.RequiresOptIn"]
+    }
+
+    buildFeatures {
+        viewBinding = true
     }
 }
 
@@ -26,13 +38,15 @@ dependencies {
     kapt deps.glide.compiler
 
     implementation deps.constraint_layout
-    implementation deps.support.app_compat
-    implementation deps.support.recyclerview
-    implementation deps.support.cardview
-    implementation deps.support.design
+    implementation deps.app_compat
+    implementation deps.activity.activity_ktx
+    implementation deps.recyclerview
+    implementation deps.cardview
+    implementation deps.material
     implementation deps.room.runtime
+    implementation deps.lifecycle.livedata_ktx
     implementation deps.lifecycle.runtime
-    implementation deps.paging_ktx
+    implementation deps.paging_runtime
     implementation deps.kotlin.stdlib
     implementation deps.retrofit.runtime
     implementation deps.retrofit.gson

@@ -20,6 +20,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.view.doOnPreDraw
 import androidx.databinding.DataBindingComponent
 import androidx.databinding.DataBindingUtil
 import androidx.fragment.app.Fragment
@@ -35,7 +36,6 @@ import com.android.example.github.R
 import com.android.example.github.binding.FragmentDataBindingComponent
 import com.android.example.github.databinding.RepoFragmentBinding
 import com.android.example.github.di.Injectable
-import com.android.example.github.testing.OpenForTesting
 import com.android.example.github.ui.common.RetryCallback
 import com.android.example.github.util.autoCleared
 import javax.inject.Inject
@@ -43,7 +43,6 @@ import javax.inject.Inject
 /**
  * The UI Controller for displaying a Github Repo's information with its contributors.
  */
-@OpenForTesting
 class RepoFragment : Fragment(), Injectable {
 
     @Inject
@@ -96,9 +95,8 @@ class RepoFragment : Fragment(), Injectable {
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        val params = RepoFragmentArgs.fromBundle(arguments!!)
         repoViewModel.setId(params.owner, params.name)
-        binding.setLifecycleOwner(viewLifecycleOwner)
+        binding.lifecycleOwner = viewLifecycleOwner
         binding.repo = repoViewModel.repo
 
         val adapter = ContributorAdapter(dataBindingComponent, appExecutors) {
@@ -106,7 +104,7 @@ class RepoFragment : Fragment(), Injectable {
             val extras = FragmentNavigatorExtras(
                     imageView to contributor.login
             )
-            navController().navigate(
+            findNavController().navigate(
                     RepoFragmentDirections.showUser(contributor.login, contributor.avatarUrl),
                     extras
             )
@@ -114,16 +112,9 @@ class RepoFragment : Fragment(), Injectable {
         this.adapter = adapter
         binding.contributorList.adapter = adapter
         postponeEnterTransition()
-        binding.contributorList.getViewTreeObserver()
-                .addOnPreDrawListener {
-                    startPostponedEnterTransition()
-                    true
-                }
+        binding.contributorList.doOnPreDraw {
+            startPostponedEnterTransition()
+        }
         initContributorList(repoViewModel)
     }
-
-    /**
-     * Created to be able to override in tests
-     */
-    fun navController() = findNavController()
 }

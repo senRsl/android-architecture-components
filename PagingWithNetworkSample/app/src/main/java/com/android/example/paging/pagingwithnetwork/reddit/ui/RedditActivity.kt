@@ -23,17 +23,19 @@ import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.Observer
+import androidx.lifecycle.AbstractSavedStateViewModelFactory
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.paging.PagedList
+import androidx.lifecycle.lifecycleScope
+import androidx.paging.ExperimentalPagingApi
+import androidx.paging.LoadState
 import com.android.example.paging.pagingwithnetwork.GlideApp
 import com.android.example.paging.pagingwithnetwork.R
 import com.android.example.paging.pagingwithnetwork.reddit.ServiceLocator
-import com.android.example.paging.pagingwithnetwork.reddit.repository.NetworkState
 import com.android.example.paging.pagingwithnetwork.reddit.repository.RedditPostRepository
-import com.android.example.paging.pagingwithnetwork.reddit.vo.RedditPost
 import kotlinx.android.synthetic.main.activity_reddit.*
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.collectLatest
 
 /**
  * A list activity that shows reddit posts in the given sub-reddit.
@@ -42,8 +44,6 @@ import kotlinx.android.synthetic.main.activity_reddit.*
  */
 class RedditActivity : AppCompatActivity() {
     companion object {
-        const val KEY_SUBREDDIT = "subreddit"
-        const val DEFAULT_SUBREDDIT = "androiddev"
         const val KEY_REPOSITORY_TYPE = "repository_type"
         fun intentFor(context: Context, type: RedditPostRepository.Type): Intent {
             val intent = Intent(context, RedditActivity::class.java)
@@ -53,17 +53,23 @@ class RedditActivity : AppCompatActivity() {
     }
 
     private val model: SubRedditViewModel by viewModels {
-        object : ViewModelProvider.Factory {
-            override fun <T : ViewModel?> create(modelClass: Class<T>): T {
+        object : AbstractSavedStateViewModelFactory(this, null) {
+            override fun <T : ViewModel?> create(
+                    key: String,
+                    modelClass: Class<T>,
+                    handle: SavedStateHandle
+            ): T {
                 val repoTypeParam = intent.getIntExtra(KEY_REPOSITORY_TYPE, 0)
                 val repoType = RedditPostRepository.Type.values()[repoTypeParam]
                 val repo = ServiceLocator.instance(this@RedditActivity)
                         .getRepository(repoType)
                 @Suppress("UNCHECKED_CAST")
-                return SubRedditViewModel(repo) as T
+                return SubRedditViewModel(repo, handle) as T
             }
         }
     }
+
+    private lateinit var adapter: PostsAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,36 +77,40 @@ class RedditActivity : AppCompatActivity() {
         initAdapter()
         initSwipeToRefresh()
         initSearch()
-        val subreddit = savedInstanceState?.getString(KEY_SUBREDDIT) ?: DEFAULT_SUBREDDIT
-        model.showSubreddit(subreddit)
     }
 
     private fun initAdapter() {
         val glide = GlideApp.with(this)
-        val adapter = PostsAdapter(glide) {
-            model.retry()
+        adapter = PostsAdapter(glide)
+        list.adapter = adapter.withLoadStateHeaderAndFooter(
+                header = PostsLoadStateAdapter(adapter),
+                footer = PostsLoadStateAdapter(adapter)
+        )
+
+        lifecycleScope.launchWhenCreated {
+            @OptIn(ExperimentalCoroutinesApi::class)
+            adapter.loadStateFlow.collectLatest { loadStates ->
+                swipe_refresh.isRefreshing = loadStates.refresh is LoadState.Loading
+            }
         }
-        list.adapter = adapter
-        model.posts.observe(this, Observer<PagedList<RedditPost>> {
-            adapter.submitList(it)
-        })
-        model.networkState.observe(this, Observer {
-            adapter.setNetworkState(it)
-        })
+
+        lifecycleScope.launchWhenCreated {
+            @OptIn(ExperimentalCoroutinesApi::class)
+            model.posts.collectLatest {
+                adapter.submitData(it)
+            }
+        }
+
+        lifecycleScope.launchWhenCreated {
+            @OptIn(ExperimentalPagingApi::class, ExperimentalCoroutinesApi::class)
+            adapter.dataRefreshFlow.collectLatest {
+                list.scrollToPosition(0)
+            }
+        }
     }
 
     private fun initSwipeToRefresh() {
-        model.refreshState.observe(this, Observer {
-            swipe_refresh.isRefreshing = it == NetworkState.LOADING
-        })
-        swipe_refresh.setOnRefreshListener {
-            model.refresh()
-        }
-    }
-
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        outState.putString(KEY_SUBREDDIT, model.currentSubreddit())
+        swipe_refresh.setOnRefreshListener { adapter.refresh() }
     }
 
     private fun initSearch() {
@@ -124,11 +134,8 @@ class RedditActivity : AppCompatActivity() {
 
     private fun updatedSubredditFromInput() {
         input.text.trim().toString().let {
-            if (it.isNotEmpty()) {
-                if (model.showSubreddit(it)) {
-                    list.scrollToPosition(0)
-                    (list.adapter as? PostsAdapter)?.submitList(null)
-                }
+            if (it.isNotBlank() && model.shouldShowSubreddit(it)) {
+                model.showSubreddit(it)
             }
         }
     }

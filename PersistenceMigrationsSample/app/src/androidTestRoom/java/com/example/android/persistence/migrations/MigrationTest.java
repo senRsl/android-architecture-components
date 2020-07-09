@@ -24,8 +24,8 @@ import androidx.room.testing.MigrationTestHelper;
 import androidx.sqlite.db.SupportSQLiteDatabase;
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory;
 import androidx.test.core.app.ApplicationProvider;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
-import androidx.test.runner.AndroidJUnit4;
 
 import org.junit.After;
 import org.junit.Before;
@@ -50,7 +50,7 @@ public class MigrationTest {
 
     // Helper for creating Room databases and migrations
     @Rule
-    public MigrationTestHelper mMigrationTestHelper =
+    public final MigrationTestHelper mMigrationTestHelper =
             new MigrationTestHelper(InstrumentationRegistry.getInstrumentation(),
                     UsersDatabase.class.getCanonicalName(),
                     new FrameworkSQLiteOpenHelperFactory());
@@ -59,7 +59,7 @@ public class MigrationTest {
     private SqliteTestDbOpenHelper mSqliteTestDbHelper;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         // To test migrations from version 1 of the database, we need to create the database
         // with version 1 using SQLite API
         mSqliteTestDbHelper = new SqliteTestDbOpenHelper(ApplicationProvider.getApplicationContext(),
@@ -69,7 +69,7 @@ public class MigrationTest {
     }
 
     @After
-    public void tearDown() throws Exception {
+    public void tearDown() {
         // Clear the database after every test
         SqliteDatabaseTestHelper.clearDatabase(mSqliteTestDbHelper);
     }

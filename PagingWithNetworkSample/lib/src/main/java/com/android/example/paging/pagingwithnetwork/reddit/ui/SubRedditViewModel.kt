@@ -16,37 +16,51 @@
 
 package com.android.example.paging.pagingwithnetwork.reddit.ui
 
-import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.Transformations.map
-import androidx.lifecycle.Transformations.switchMap
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.asFlow
+import androidx.paging.PagingData
 import com.android.example.paging.pagingwithnetwork.reddit.repository.RedditPostRepository
+import com.android.example.paging.pagingwithnetwork.reddit.vo.RedditPost
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.*
 
-class SubRedditViewModel(private val repository: RedditPostRepository) : ViewModel() {
-    private val subredditName = MutableLiveData<String>()
-    private val repoResult = map(subredditName) {
-        repository.postsOfSubreddit(it, 30)
+class SubRedditViewModel(
+    private val repository: RedditPostRepository,
+    private val savedStateHandle: SavedStateHandle
+) : ViewModel() {
+    companion object {
+        const val KEY_SUBREDDIT = "subreddit"
+        const val DEFAULT_SUBREDDIT = "androiddev"
     }
-    val posts = switchMap(repoResult, { it.pagedList })!!
-    val networkState = switchMap(repoResult, { it.networkState })!!
-    val refreshState = switchMap(repoResult, { it.refreshState })!!
 
-    fun refresh() {
-        repoResult.value?.refresh?.invoke()
-    }
-
-    fun showSubreddit(subreddit: String): Boolean {
-        if (subredditName.value == subreddit) {
-            return false
+    init {
+        if (!savedStateHandle.contains(KEY_SUBREDDIT)) {
+            savedStateHandle.set(KEY_SUBREDDIT, DEFAULT_SUBREDDIT)
         }
-        subredditName.value = subreddit
-        return true
     }
 
-    fun retry() {
-        val listing = repoResult?.value
-        listing?.retry?.invoke()
-    }
+    private val clearListCh = Channel<Unit>(Channel.CONFLATED)
 
-    fun currentSubreddit(): String? = subredditName.value
+    @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+    val posts = flowOf(
+        clearListCh.consumeAsFlow().map { PagingData.empty<RedditPost>() },
+        savedStateHandle.getLiveData<String>(KEY_SUBREDDIT)
+            .asFlow()
+            .flatMapLatest { repository.postsOfSubreddit(it, 30) }
+    ).flattenMerge(2)
+
+    fun shouldShowSubreddit(
+        subreddit: String
+    ) = savedStateHandle.get<String>(KEY_SUBREDDIT) != subreddit
+
+    fun showSubreddit(subreddit: String) {
+        if (!shouldShowSubreddit(subreddit)) return
+
+        clearListCh.offer(Unit)
+
+        savedStateHandle.set(KEY_SUBREDDIT, subreddit)
+    }
 }

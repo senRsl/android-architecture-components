@@ -20,7 +20,7 @@ apply plugin: 'kotlin-kapt'
 apply plugin: 'kotlin-android-extensions'
 
 android {
-    compileSdkVersion build_versions.target_sdk
+    compileSdkVersion build_versions.compile_sdk
     buildToolsVersion build_versions.build_tools
     defaultConfig {
         applicationId "com.android.example.livedata"
@@ -50,9 +50,9 @@ android {
 }
 
 dependencies {
-    implementation deps.support.app_compat
-    implementation deps.support.design
-    implementation deps.support.core_ktx
+    implementation deps.app_compat
+    implementation deps.material
+    implementation deps.core_ktx
     implementation deps.lifecycle.runtime
     implementation deps.lifecycle.viewmodel_ktx
     implementation deps.lifecycle.livedata_ktx
@@ -70,6 +70,5 @@ dependencies {
     androidTestImplementation deps.espresso.contrib
     androidTestImplementation deps.arch_core.testing
 
-    ext.coroutinesVersion = '1.2.1'
-    testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:$coroutinesVersion"
+    testImplementation deps.coroutines.test
 }
